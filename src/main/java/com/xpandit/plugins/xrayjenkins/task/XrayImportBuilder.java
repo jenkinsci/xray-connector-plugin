@@ -1,5 +1,6 @@
 package com.xpandit.plugins.xrayjenkins.task;
 
+import com.cloudbees.plugins.credentials.common.StandardCredentials;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -9,6 +10,7 @@ import com.xpandit.plugins.xrayjenkins.Utils.FileUtils;
 import com.xpandit.plugins.xrayjenkins.Utils.FormUtils;
 import com.xpandit.plugins.xrayjenkins.Utils.ProxyUtil;
 import com.xpandit.plugins.xrayjenkins.exceptions.XrayJenkinsGenericException;
+import com.xpandit.plugins.xrayjenkins.factory.ClientFactory;
 import com.xpandit.plugins.xrayjenkins.model.CredentialResolver;
 import com.xpandit.plugins.xrayjenkins.model.HostingType;
 import com.xpandit.plugins.xrayjenkins.model.ServerConfiguration;
@@ -522,22 +524,31 @@ public class XrayImportBuilder extends Notifier implements SimpleBuildStep {
 
         final CredentialResolver credentialResolver = importInstance
                 .getCredential(build)
-                .orElseGet(() -> new CredentialResolver(this.credentialId, build));
+                .orElseGet(() -> new CredentialResolver(this.credentialId, build, importInstance.getHosting()));
         final HttpRequestProvider.ProxyBean proxyBean = ProxyUtil.createProxyBean();
         final HostingType hostingType = importInstance.getHosting() == null
                 ? HostingType.SERVER
                 : importInstance.getHosting();
-        XrayImporter client;
 
+        final StandardCredentials credentials = credentialResolver.getCredentials();
+        if (credentials == null) {
+            String credentialIdNotFound = Optional.ofNullable(importInstance.getCredentialId())
+                    .filter(StringUtils::isNotBlank)
+                    .orElse(this.credentialId);
+            String errorTxt = String.format(
+                    "Unable to create Xray %s results import client! Credential '%s' not found. For Cloud instances: Secret Text credentials are not allowed",
+                    hostingType.name(),
+                    credentialIdNotFound);
+            throw new AbortException(errorTxt);
+        }
+
+        XrayImporter client;
         if (hostingType == HostingType.CLOUD) {
-            client = new XrayImporterCloudImpl(credentialResolver.getUsername(),
-                                               credentialResolver.getPassword(),
-                                               proxyBean);
+            client = ClientFactory.getCloudResultsImportClient(credentials, proxyBean)
+                    .orElseThrow(() -> new XrayJenkinsGenericException("Unable to create Xray Cloud results import client! (check credential type selected)."));
         } else if (hostingType == HostingType.SERVER) {
-            client = new XrayImporterImpl(importInstance.getServerAddress(),
-                                          credentialResolver.getUsername(),
-                                          credentialResolver.getPassword(),
-                                          proxyBean);
+            client = ClientFactory.getServerResultsImportClient(importInstance.getServerAddress(), credentials, proxyBean)
+                    .orElseThrow(() -> new XrayJenkinsGenericException("Unable to create Xray Server/DC results import client! (check credential type selected)."));
         } else {
             XrayEnvironmentVariableSetter
                     .failed("Hosting type not recognized.")

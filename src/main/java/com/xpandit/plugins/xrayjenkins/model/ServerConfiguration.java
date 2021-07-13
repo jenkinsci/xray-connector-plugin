@@ -2,8 +2,16 @@ package com.xpandit.plugins.xrayjenkins.model;
 
 import com.cloudbees.plugins.credentials.CredentialsMatchers;
 import com.cloudbees.plugins.credentials.CredentialsProvider;
+import com.cloudbees.plugins.credentials.common.StandardCredentials;
 import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import com.xpandit.plugins.xrayjenkins.Utils.CredentialUtil;
 import com.xpandit.plugins.xrayjenkins.Utils.ProxyUtil;
+import com.xpandit.plugins.xrayjenkins.factory.ClientFactory;
+import com.xpandit.xray.service.XrayClient;
+import com.xpandit.xray.service.XrayCloudCredentials;
+import com.xpandit.xray.service.XrayServerCredentials;
 import com.xpandit.xray.service.impl.XrayClientImpl;
 import com.xpandit.xray.service.impl.XrayCloudClientImpl;
 import com.xpandit.xray.service.impl.bean.ConnectionResult;
@@ -12,8 +20,12 @@ import hudson.Extension;
 import hudson.model.Item;
 import hudson.util.FormValidation;
 import hudson.util.ListBoxModel;
+import java.lang.reflect.Type;
 import java.util.Collections;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import jenkins.model.GlobalConfiguration;
 import jenkins.model.Jenkins;
@@ -51,14 +63,40 @@ public class ServerConfiguration extends GlobalConfiguration {
 	
 	@Override
     public boolean configure(StaplerRequest req, JSONObject formData) throws FormException {
-        
+        checkInvalidCloudCredentials(formData);
+
         req.bindJSON(this, formData.getJSONObject("xrayinstance"));
-        
         save();
         return true;
     }
-	
-	public void setServerInstances(List<XrayInstance> serverInstances){
+
+    private void checkInvalidCloudCredentials(JSONObject formData) throws FormException {
+        if (!formData.has("xrayinstance")) {
+            return;
+        }
+        JSONObject xrayInstances = formData.getJSONObject("xrayinstance");
+        if (!xrayInstances.has("serverInstances")) {
+            return;
+        }
+        String xrayInstancesJson = xrayInstances.getJSONArray("serverInstances").toString();
+
+        Type listType = new TypeToken<List<XrayInstance>>(){}.getType();
+        List<XrayInstance> instances = new Gson().fromJson(xrayInstancesJson, listType);
+
+        Set<String> cloudCredentialIds = instances
+                .stream()
+                .filter(instance -> instance.getHosting() == HostingType.CLOUD)
+                .map(XrayInstance::getCredentialId)
+                .filter(StringUtils::isNotBlank)
+                .collect(Collectors.toSet());
+
+        if (CollectionUtils.isNotEmpty(cloudCredentialIds) &&
+                CredentialUtil.hasNonUsernamePasswordCredentials(CredentialUtil.getAllSystemCredentials(null), cloudCredentialIds)) {
+            throw new FormException("[Xray connector] Jira cloud instances can either be empty or have credentials of type Username/Password.", "xrayinstance");
+        }
+    }
+
+    public void setServerInstances(List<XrayInstance> serverInstances){
         this.serverInstances = serverInstances;
     }
 
@@ -116,8 +154,11 @@ public class ServerConfiguration extends GlobalConfiguration {
         // We only need to check the URL for Server instances, since Cloud API URL is hardcoded and controlled by us.
         if (Objects.equals(hosting, HostingType.SERVER.toString()) && StringUtils.isNotBlank(serverAddress)) {
             HttpRequestProvider.ProxyBean proxyBean = ProxyUtil.createProxyBean();
-            XrayClientImpl xrayClient = new XrayClientImpl(serverAddress, null, null, proxyBean);
-            if (!xrayClient.isJiraInstance()) {
+            boolean isJiraInstance = ClientFactory.getServerClientWithoutCredentials(serverAddress, proxyBean)
+                    .map(XrayClient::isJiraInstance)
+                    .orElse(Boolean.FALSE);
+
+            if (!isJiraInstance) {
                 logger.error("URL provided is not from a Jira instance -> {}/rest/api/2/serverInfo didn't return a valid result.", serverAddress);
                 return FormValidation.error("URL provided is not from a Jira instance (check if your /serverInfo endpoint is not blocked)");
             }
@@ -141,25 +182,32 @@ public class ServerConfiguration extends GlobalConfiguration {
             return FormValidation.error("Hosting type can't be blank.");
         }
 
-        final StandardUsernamePasswordCredentials credential = CredentialsMatchers.firstOrNull(getAllSystemCredentials(item), withId(credentialId));
+        final StandardCredentials credential = CredentialsMatchers.firstOrNull(getAllSystemCredentials(item), withId(credentialId));
         if (credential == null) {
             return FormValidation.error("Cannot find currently selected credentials");
         }
-        
-        final String username = credential.getUsername();
-        final String password = credential.getPassword().getPlainText();
+
         final HttpRequestProvider.ProxyBean proxyBean = ProxyUtil.createProxyBean();
         final ConnectionResult connectionResult;
 
         if (hosting.equals(HostingType.CLOUD.toString())) {
-            connectionResult = new XrayCloudClientImpl(username, password, proxyBean).testConnection();
+            Optional<XrayCloudCredentials> cloudClient = ClientFactory.getCloudClient(credential, proxyBean);
+            if (!cloudClient.isPresent()) {
+                return FormValidation.error("Unable to create Xray Cloud client! Cloud instances only support credentials of type Username/Password");
+            }
+
+            connectionResult = cloudClient.get().testConnection();
         } else if (hosting.equals(HostingType.SERVER.toString())) {
             if(StringUtils.isBlank(serverAddress)) {
                 return FormValidation.error("Server address can't be empty");
             }
 
-            XrayClientImpl xrayClient = new XrayClientImpl(serverAddress, username, password, proxyBean);
-            connectionResult = jiraServerTestConnection(serverAddress, xrayClient);
+            Optional<XrayServerCredentials> xrayClient = ClientFactory.getServerClient(serverAddress, credential, proxyBean);
+            if (!xrayClient.isPresent()) {
+                return FormValidation.error("Unable to create Xray Server/DC client! (Please check the type of the selected credentials)");
+            }
+
+            connectionResult = jiraServerTestConnection(serverAddress, xrayClient.get());
         } else {
             return FormValidation.error("Hosting type not recognized.");
         }
@@ -176,7 +224,7 @@ public class ServerConfiguration extends GlobalConfiguration {
         }
     }
 
-    private ConnectionResult jiraServerTestConnection(String serverAddress, XrayClientImpl xrayClient) {
+    private ConnectionResult jiraServerTestConnection(String serverAddress, XrayServerCredentials xrayClient) {
         if (!xrayClient.isJiraInstance()) {
             logger.error("URL provided is not from a Jira instance -> {}/rest/api/2/serverInfo didn't return a valid result.", serverAddress);
             return ConnectionResult.connectionFailed("URL provided is not from a Jira instance (check if your /serverInfo endpoint is not blocked)");
@@ -198,7 +246,7 @@ public class ServerConfiguration extends GlobalConfiguration {
     }
     
     @Nullable
-    private StandardUsernamePasswordCredentials findCredential(@Nullable final Item item, @Nullable final String credentialId) {
+    private StandardCredentials findCredential(@Nullable final Item item, @Nullable final String credentialId) {
 	    if (StringUtils.isBlank(credentialId)) {
 	        return null;
         }
