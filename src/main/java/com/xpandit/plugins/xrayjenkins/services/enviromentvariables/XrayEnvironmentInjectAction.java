@@ -51,4 +51,8 @@ public class XrayEnvironmentInjectAction implements EnvironmentContributingActio
     public String getUrlName() {
         return null;
     }
+
+    public Map<String, String> getXrayEnvVarsResult() {
+        return newVariablesToAdd;
+    }
 }
