@@ -1,5 +1,6 @@
 package com.xpandit.plugins.xrayjenkins.model;
 
+import java.util.Objects;
 import com.cloudbees.plugins.credentials.CredentialsProvider;
 import com.cloudbees.plugins.credentials.common.StandardCredentials;
 import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials;
@@ -10,7 +11,6 @@ import hudson.model.Run;
 import hudson.model.User;
 import java.util.Collections;
 import org.acegisecurity.Authentication;
-import org.apache.commons.lang.StringUtils;
 
 import javax.annotation.Nullable;
 import java.util.List;
@@ -37,7 +37,7 @@ public class CredentialResolver {
     }
     
     private void resolveCredential() {
-        if (StringUtils.isNotBlank(this.credentialId)) {
+        if (this.credentialId != null && !this.credentialId.isBlank()) {
             this.credentials = findCredentialById();
         }
     }
@@ -61,7 +61,7 @@ public class CredentialResolver {
         List<StandardCredentials> userScopedCredentials = CredentialUtil.getAllUserScopedCredentials(run.getParent(), buildUserAuth);
         StandardCredentials credentialsMatched = userScopedCredentials
                 .stream()
-                .filter(cred -> StringUtils.equals(cred.getId(), this.credentialId))
+                .filter(cred -> Objects.equals(cred.getId(), this.credentialId))
                 .findFirst()
                 .orElse(null);
 

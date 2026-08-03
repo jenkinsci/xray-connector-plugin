@@ -6,7 +6,6 @@ import com.xpandit.plugins.xrayjenkins.model.ServerConfiguration;
 import com.xpandit.plugins.xrayjenkins.model.XrayInstance;
 import hudson.util.ListBoxModel;
 import org.apache.commons.collections.CollectionUtils;
-import org.apache.commons.lang.StringUtils;
 
 import java.util.List;
 
@@ -33,7 +32,7 @@ public class FormUtils {
                 throw new XrayJenkinsGenericException("Null hosting type found");
             } else {
                 String alias = sc.getAlias();
-                if (StringUtils.isBlank(sc.getCredentialId())) {
+                if (sc.getCredentialId() == null || sc.getCredentialId().isBlank()) {
                     alias = "[User Auth required] " + alias;
                 }
 
