@@ -94,7 +94,7 @@
 
     <f:section name="dynamicFields">
         <f:entry title="Parameters">
-            <p id="configurableFields_${descriptor.defaultBuildID()}" style="border-left:solid;border-color:#00a3ac;width:50vw"></p>
+            <p id="configurableFields_${descriptor.defaultBuildID()}" style="padding-left:6px;border-left:solid;border-color:#00a3ac;width:50vw"></p>
         </f:entry>
     </f:section>
 
