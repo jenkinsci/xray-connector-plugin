@@ -51,7 +51,7 @@
 		<dependency>
 			<groupId>com.xpandit.xray</groupId>
 			<artifactId>client-core</artifactId>
-    		<version>2.7.0</version>
+			<version>2.7.1</version>
 		</dependency>
 		<dependency>
 			<groupId>org.jenkins-ci.main</groupId>
@@ -91,11 +91,11 @@
 			<artifactId>gson</artifactId>
 			<version>2.9.0</version>
 		</dependency>
-		 <dependency>
-		    <groupId>org.jenkins-ci.plugins</groupId>
-		    <artifactId>jquery</artifactId>
-		    <version>1.12.4-0</version>
-  		</dependency>
+		<dependency>
+			<groupId>org.jenkins-ci.plugins</groupId>
+			<artifactId>jquery</artifactId>
+			<version>1.12.4-0</version>
+		</dependency>
 		<!-- https://mvnrepository.com/artifact/com.fasterxml.jackson.core/jackson-databind -->
 		<dependency>
 			<groupId>com.fasterxml.jackson.core</groupId>
@@ -117,7 +117,7 @@
 		<dependency>
 			<groupId>org.jenkins-ci.plugins</groupId>
 			<artifactId>junit</artifactId>
-            <version>1.20</version>
+			<version>1.20</version>
 		</dependency>
 		<dependency>
 			<groupId>org.jenkins-ci.plugins</groupId>
@@ -165,13 +165,13 @@
 	</dependencyManagement>
 
 	<build>
-	 	<plugins>
-	        <plugin>
-	          <groupId>org.apache.maven.plugins</groupId>
-	          <artifactId>maven-surefire-plugin</artifactId>
-	          <version>2.19.1</version>
-	        </plugin>
-        </plugins>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>2.19.1</version>
+			</plugin>
+		</plugins>
 	</build>
 
 	<repositories>
@@ -183,6 +183,11 @@
 			<id>xblend-repo-releases-public</id>
 			<url>https://maven.getxray.app:443/artifactory/releases</url>
 		</repository>
+
+		<repository>
+			<id>atlassian-public</id>
+			<url>https://maven.atlassian.com/repository/public</url>
+		</repository>
 	</repositories>
 
 	<pluginRepositories>
@@ -190,6 +195,9 @@
 			<id>repo.jenkins-ci.org</id>
 			<url>https://repo.jenkins-ci.org/public/</url>
 		</pluginRepository>
+		<pluginRepository>
+			<id>central</id>
+			<url>https://repo.maven.apache.org/maven2</url>
+		</pluginRepository>
 	</pluginRepositories>
-
 </project>
