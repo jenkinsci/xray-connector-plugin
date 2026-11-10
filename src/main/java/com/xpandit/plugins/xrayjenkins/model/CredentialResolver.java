@@ -19,10 +19,10 @@ import org.jenkinsci.plugins.plaincredentials.StringCredentials;
 
 public class CredentialResolver {
     private final String credentialId;
-    private final Run<?, ?> run;
+    private final transient Run<?, ?> run;
     private final HostingType hostingType;
 
-    private StandardCredentials credentials;
+    private transient StandardCredentials credentials;
 
     public CredentialResolver(final String credentialId, final Run<?, ?> run, final HostingType hostingType) {
         this.credentialId = credentialId;
