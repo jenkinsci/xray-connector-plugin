@@ -18,7 +18,6 @@ public class XrayInstance {
 	private String serverAddress;
 	private HostingType hosting;
     private String credentialId;
-    private CredentialResolver credentialResolver;
 
 	@DataBoundConstructor
  	public XrayInstance(String configID, String alias, HostingType hosting, String serverAddress, String credentialId) {
@@ -54,11 +53,12 @@ public class XrayInstance {
 	}
 
 	public Optional<CredentialResolver> getCredential(final Run<?, ?> runContext) {
-		if (this.credentialResolver == null && StringUtils.isNotBlank(this.credentialId)) {
-			this.credentialResolver = new CredentialResolver(this.credentialId, runContext, this.hosting);
+		// Never cache the resolver in a field: it references the Run, and this object is persisted
+		// (global config and legacy job config.xml), which would serialize a Run nested in other objects.
+		if (StringUtils.isBlank(this.credentialId)) {
+			return Optional.empty();
 		}
-
-		return Optional.ofNullable(this.credentialResolver);
+		return Optional.of(new CredentialResolver(this.credentialId, runContext, this.hosting));
 	}
 	
 	public HostingType getHosting() { return hosting; }
